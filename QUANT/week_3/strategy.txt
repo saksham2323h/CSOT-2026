@@ -1,0 +1,51 @@
+Quant CSOT — Week 3 Challenge: Strategy Overview
+
+---
+
+## 1. Executive Summary
+This document outlines a quantitative equity trading strategy designed for the Quant CSOT Week 3 Challenge. The strategy relies on an ensemble machine learning approach, combining a tree-based model and a linear model to predict cross-sectional forward returns. It utilizes a daily selection of long and short positions while strictly adhering to maximum weight and dollar-neutrality constraints. 
+
+## 2. Data & Feature Engineering
+The model is trained on a universe of 2,167 stocks over 5,058 trading days. 
+
+* Input Features: The dataset consists of 22 technical indicators. 
+* Top Feature Importance: The most predictive features identified during training include Ease of Movement, 60-day Volatility, 20-day Volatility, Ichimoku, and Average True Range.
+* Target Variable: The models are trained to predict 5-day lagged, cross-sectionally ranked forward returns.
+* Data Processing: Features are strictly cross-sectionally standardized (z-scored) on a daily basis to maintain mean 0 and standard deviation 1, with missing and infinite values replaced by 0.0. 
+* Sampling: To optimize memory, the training dataset is sampled every 5 days, resulting in 750,000 training samples.
+
+---
+
+## 3. Predictive Modeling
+The predictive engine utilizes a blended ensemble of two distinct machine learning models to balance non-linear interactions and linear stability. 
+
+* Primary Model: A LightGBM Regressor configured with a learning rate of 0.03, max depth of 4, and 31 leaves. 
+* Secondary Model: A Ridge Regression model with an alpha penalty of 100. 
+* Ensemble Weighting: The final predictive alpha is calculated as a 60% weight to the LightGBM predictions and a 40% weight to the Ridge predictions. 
+* Validation: An Out-Of-Sample (OOS) evaluation on the final 20% of the training timeline yielded a true OOS Spearman Information Coefficient (IC) of 0.0236.
+* Final Training: The final submission model is trained on the entirely available dataset (no data leakage due to the strict out-of-sample test period constraint) using the optimal number of trees found during early stopping.
+
+---
+
+## 4. Signal Processing & Portfolio Construction
+The daily `get_weights` function generates target allocations while enforcing strict capacity, position limit, and dollar-neutral constraints. 
+
+* Signal Smoothing: To reduce turnover, the raw ensemble predictions are smoothed using an Exponential Moving Average (EMA) approach. 
+* Smoothing Formula: The daily signal is blended as 70% of the current day's prediction and 30% of the previous day's signal. 
+* Candidate Selection: The portfolio selects the top N stocks for the long leg and the bottom N stocks for the short leg. 
+* Dynamic Tranching: The variable N is dynamically calculated as the maximum of 2 and the minimum of 10 or 20% of the daily tradable universe.
+* Base Sizing: Initial weights are distributed equally on the smaller side to ensure gross capacity is never wasted, capped at an absolute maximum of 0.1 (10%) per stock. 
+* Dollar-Neutral Scaling: The gross positive and absolute negative weights are calculated, and the larger side is scaled down to match the smaller target, enforcing standard dollar neutrality. 
+* Residual Distribution: Any microscopic residual net weight is distributed evenly across all active, non-zero positions to prevent artificial weight spikes in any single asset. 
+
+---
+
+## 5. Backtest Performance
+An initial backtest run over the provided data period generated the following summary metrics:
+
+* Turnover: 72.29%
+* Gross Sharpe Ratio: -0.4135
+* Net Sharpe Ratio: -0.4884
+* Mean Book Value: 0.9960
+
+Note: The strategy successfully passes all local validation checks, including unit capital limits, maximum individual weight caps, dollar neutrality bounds, and respect for the daily tradable universe.
